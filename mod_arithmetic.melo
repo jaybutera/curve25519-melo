@@ -28,7 +28,7 @@ def add_u512(x: U512, y: U512): U512 =
         high: high,
     }
 
-def add(x: Nat, y: Nat): U512 =
+def add_nat_to_u512(x: Nat, y: Nat): U512 =
     let low = x + y in
     # If there was an overflow
     if low < x then
@@ -36,13 +36,10 @@ def add(x: Nat, y: Nat): U512 =
     else
         U512 { low: low, high: 0 }
 
-def addq(x: U512, y: U512): Nat =
+def addq(x: Nat, y: Nat): Nat =
     #let q = 2**255-19 in
     #let k = 2**256 % q in
-    modq(add_u512(x, y))
-    #modq(k
-    #to_u512(
-    #addq(addq(mulq(k, addq(x.high, y.high)), x.low), y.low))
+    modq(add_nat_to_u512(x, y))
 
 # Uses 512 as intermediate repr and modq to produce a Nat
 def mulq(x: Nat, y: Nat): Nat = modq(mul_nat_to_u512(x, y))
@@ -52,24 +49,22 @@ def mul_nat_to_u512(x: Nat, y: Nat): U512 =
     let res = U512 { low: 0, high: 0 } in
     loop 256 do
         set! res = if y % 2 == 1 then add_u512(res, to_u512(x)) else res;
-        set! x = x << 2;
-        set! y = y >> 2;
+        set! x = x << 1;
+        set! y = y >> 1;
     done with res
 
-#def mulq(x: U512, y: U512): U512 =
-#    let q = 2**255-19 in
-#    let k = 2**256 % q in
-#    # 2^256*(2^256*xh*yh + xh*yl + xl*yh) + xl*yl mod q
-#    addq(
-#        addq(
-#            addq(
-#                mulq(
-#                     k,
-#                     mulq(x.high, y.high)),
-#                mulq(x.high, y.low)),
-#            mulq(x.low, y.high)),
-#        mulq(x.low, y.low))
-
+def expq(base: Nat, exp: Nat): Nat =
+    let res = 1 :: Nat in
+    loop 256 do
+        set! res = if exp & 1 then
+                #mulq(res, mulq(base, base))
+                mulq(res, base)
+            else
+                res;
+                #mulq(res, base);
+        set! base = mulq(base, base);
+        set! exp = exp >> 1;
+    done with res
 
 def modq(x: U512): Nat =
     let q = 2**255-19 in
@@ -112,11 +107,14 @@ def generate<$x>(n: {$x}) =
 
 def add_point(a: Point, b: Point) =
     let const_a = 486662 in
+    let k_a = const_a * 2 in
     # TODO handle if b = -a
     # TODO this all needs to be mod 2^255-19
     if a.x == b.x then
         Point {
-            x: ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**2 - const_a - 2*a.x,
+            x: addq(mulq(mulq(3,a.x), a.x), addq(mulq(k_a, a.x), 1)) /
+                expq(mulq(2, a.y), 2) - const_a - mulq(2, a.x),
+            #x: ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**2 - const_a - 2*a.x,
             y: (((2*a.x + b.x + const_a) * (3*a.x*a.x + 2*const_a*a.x+1)) / (2*a.y)) - ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**3 - a.y
         }
     else
@@ -132,5 +130,6 @@ def add_point(a: Point, b: Point) =
 ---
 let a = Point { x: 1, y: 1 } in
 let b = Point { x: 2, y: 1 } in
-generate(2)
+#generate(2)
 #add_point(a,b)
+expq(2, 4)
