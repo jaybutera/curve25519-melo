@@ -1,0 +1,136 @@
+struct U512 {
+    low: Nat,
+    high: Nat,
+}
+
+struct Point {
+    x: Nat,
+    y: Nat,
+}
+
+#def add(x: Nat, y: Nat) =
+#    let xir = U512 { low: x, high: 0 } in
+#    let yir = U512 { low: y, high: 0 } in
+#    add_ir(x, y).low
+
+def to_u512(x: Nat) = U512 { low: x, high: 0 }
+
+def add_u512(x: U512, y: U512): U512 =
+    let low = x.low + y.low in
+    # If there was an overflow
+    let high =
+        if low < x.low then
+            x.high + y.high + 1
+        else
+            x.high + y.high in
+    U512 {
+        low: low,
+        high: high,
+    }
+
+def add(x: Nat, y: Nat): U512 =
+    let low = x + y in
+    # If there was an overflow
+    if low < x then
+        U512 { low: low, high: 1 }
+    else
+        U512 { low: low, high: 0 }
+
+def addq(x: U512, y: U512): Nat =
+    #let q = 2**255-19 in
+    #let k = 2**256 % q in
+    modq(add_u512(x, y))
+    #modq(k
+    #to_u512(
+    #addq(addq(mulq(k, addq(x.high, y.high)), x.low), y.low))
+
+# Uses 512 as intermediate repr and modq to produce a Nat
+def mulq(x: Nat, y: Nat): Nat = modq(mul_nat_to_u512(x, y))
+
+# Convenient multiply fn
+def mul_nat_to_u512(x: Nat, y: Nat): U512 =
+    let res = U512 { low: 0, high: 0 } in
+    loop 256 do
+        set! res = if y % 2 == 1 then add_u512(res, to_u512(x)) else res;
+        set! x = x << 2;
+        set! y = y >> 2;
+    done with res
+
+#def mulq(x: U512, y: U512): U512 =
+#    let q = 2**255-19 in
+#    let k = 2**256 % q in
+#    # 2^256*(2^256*xh*yh + xh*yl + xl*yh) + xl*yl mod q
+#    addq(
+#        addq(
+#            addq(
+#                mulq(
+#                     k,
+#                     mulq(x.high, y.high)),
+#                mulq(x.high, y.low)),
+#            mulq(x.low, y.high)),
+#        mulq(x.low, y.low))
+
+
+def modq(x: U512): Nat =
+    let q = 2**255-19 in
+    let k = 2**256 % q in
+    (k * (x.high % q) % q) + (x.low % q)
+
+#def modq(x: U512): U512 =
+#    let q = 2**255-19 in
+#    let k = 2**256 % q in
+#    U512 {
+#        low: (k * (x.high % q) % q) + (x.low % q),
+#        high: 0
+#    }
+
+
+# $k is the bound on iterations in the modulo operation, $k=x/m
+#def mod_ir<$k>(x: U512, m: Nat, n: {$k}) =
+#    let r = x in
+#    let count = 0 in
+#    #loop $k do
+#    loop 256 do
+#        let a = checked_sub(r, m, 0) in
+#        set! r = a;
+#        let a = checked_sub(r, m, 0) in
+#            if a < r then
+#        set! count =
+#            if a < r then
+#                count + 1
+#            else
+#                count
+#    done with count
+
+def generate<$x>(n: {$x}) =
+    let g = Point { x: 9, y: 14781619447589544791020593568409986887264606134616475288964881837755586237401 } in
+    let res = g in
+    loop $x do
+        set! res = add_point(g, res);
+    done with res
+
+
+def add_point(a: Point, b: Point) =
+    let const_a = 486662 in
+    # TODO handle if b = -a
+    # TODO this all needs to be mod 2^255-19
+    if a.x == b.x then
+        Point {
+            x: ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**2 - const_a - 2*a.x,
+            y: (((2*a.x + b.x + const_a) * (3*a.x*a.x + 2*const_a*a.x+1)) / (2*a.y)) - ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**3 - a.y
+        }
+    else
+        Point {
+            x: ((b.y - a.y) / (b.x - a.x))**2 - const_a - a.x - b.x,
+            y: (((2*a.x + b.x + const_a) * (b.y - a.y)) / (b.x - a.x)) - ((b.y - a.y) / (b.x - a.x))**3 - a.y
+        }
+
+# 2G
+#( 14847277145635483483963372537557091634710985132825781088887140890597596352251 , 48981431527428949880507557032295310859754924433568441600873610210018059225738 )
+
+
+---
+let a = Point { x: 1, y: 1 } in
+let b = Point { x: 2, y: 1 } in
+generate(2)
+#add_point(a,b)
