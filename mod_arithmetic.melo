@@ -8,11 +8,6 @@ struct Point {
     y: Nat,
 }
 
-#def add(x: Nat, y: Nat) =
-#    let xir = U512 { low: x, high: 0 } in
-#    let yir = U512 { low: y, high: 0 } in
-#    add_ir(x, y).low
-
 def to_u512(x: Nat) = U512 { low: x, high: 0 }
 
 def add_u512(x: U512, y: U512): U512 =
@@ -37,8 +32,6 @@ def add_nat_to_u512(x: Nat, y: Nat): U512 =
         U512 { low: low, high: 0 }
 
 def addq(x: Nat, y: Nat): Nat =
-    #let q = 2**255-19 in
-    #let k = 2**256 % q in
     modq(add_nat_to_u512(x, y))
 
 # Uses 512 as intermediate repr and modq to produce a Nat
@@ -71,32 +64,6 @@ def modq(x: U512): Nat =
     let k = 2**256 % q in
     (k * (x.high % q) % q) + (x.low % q)
 
-#def modq(x: U512): U512 =
-#    let q = 2**255-19 in
-#    let k = 2**256 % q in
-#    U512 {
-#        low: (k * (x.high % q) % q) + (x.low % q),
-#        high: 0
-#    }
-
-
-# $k is the bound on iterations in the modulo operation, $k=x/m
-#def mod_ir<$k>(x: U512, m: Nat, n: {$k}) =
-#    let r = x in
-#    let count = 0 in
-#    #loop $k do
-#    loop 256 do
-#        let a = checked_sub(r, m, 0) in
-#        set! r = a;
-#        let a = checked_sub(r, m, 0) in
-#            if a < r then
-#        set! count =
-#            if a < r then
-#                count + 1
-#            else
-#                count
-#    done with count
-
 def generate<$x>(n: {$x}) =
     let g = Point { x: 9, y: 14781619447589544791020593568409986887264606134616475288964881837755586237401 } in
     let res = g in
@@ -109,18 +76,20 @@ def add_point(a: Point, b: Point) =
     let const_a = 486662 in
     let k_a = const_a * 2 in
     # TODO handle if b = -a
-    # TODO this all needs to be mod 2^255-19
     if a.x == b.x then
         Point {
-            x: addq(mulq(mulq(3,a.x), a.x), addq(mulq(k_a, a.x), 1)) /
-                expq(mulq(2, a.y), 2) - const_a - mulq(2, a.x),
             #x: ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**2 - const_a - 2*a.x,
-            y: (((2*a.x + b.x + const_a) * (3*a.x*a.x + 2*const_a*a.x+1)) / (2*a.y)) - ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**3 - a.y
+            x: expq(addq(mulq(3,mulq(a.x, a.x)), addq(mulq(k_a, a.x), 1)) / mulq(2, a.y), 2) - const_a - mulq(2, a.x),
+            #y: (((2*a.x + b.x + const_a) * (3*a.x*a.x + 2*const_a*a.x+1)) / (2*a.y)) - ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**3 - a.y
+            y: mulq(addq(addq(mulq(2,a.x), b.x), const_a), addq(mulq(3,mulq(a.x,a.x)), addq(mulq(k_a,a.x), 1))) / mulq(2,a.y)
+                - expq(addq(mulq(3,mulq(a.x,a.x)), addq(mulq(k_a,a.x), 1)) / mulq(2,a.y), 3) - a.y,
         }
     else
         Point {
-            x: ((b.y - a.y) / (b.x - a.x))**2 - const_a - a.x - b.x,
-            y: (((2*a.x + b.x + const_a) * (b.y - a.y)) / (b.x - a.x)) - ((b.y - a.y) / (b.x - a.x))**3 - a.y
+            #x: ((b.y - a.y) / (b.x - a.x))**2 - const_a - a.x - b.x,
+            x: expq((b.y - a.y) / (b.x - a.x), 2) - const_a - a.x - b.x,
+            #y: (((2*a.x + b.x + const_a) * (b.y - a.y)) / (b.x - a.x)) - ((b.y - a.y) / (b.x - a.x))**3 - a.y
+            y: mulq(addq(mulq(2, a.x), addq(b.x, const_a)), b.y - a.y) / (b.x - a.x) - expq((b.y - a.y) / (b.x - a.x), 3) - a.y
         }
 
 # 2G
@@ -130,6 +99,6 @@ def add_point(a: Point, b: Point) =
 ---
 let a = Point { x: 1, y: 1 } in
 let b = Point { x: 2, y: 1 } in
-#generate(2)
+generate(4)
 #add_point(a,b)
-expq(2, 4)
+#expq(2, 4)
