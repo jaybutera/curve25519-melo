@@ -1,0 +1,181 @@
+#require "signed_int.melo"
+
+struct U512 {
+    low: Nat,
+    high: Nat,
+}
+
+struct Point {
+    x: Nat,
+    y: Nat,
+}
+
+def to_u512(x: Nat) = U512 { low: x, high: 0 }
+
+def add_u512(x: U512, y: U512): U512 =
+    let low = x.low + y.low in
+    # If there was an overflow
+    let high =
+        if low < x.low then
+            x.high + y.high + 1
+        else
+            x.high + y.high in
+    U512 {
+        low: low,
+        high: high,
+    }
+
+def add_nat_to_u512(x: Nat, y: Nat): U512 =
+    let low = x + y in
+    # If there was an overflow
+    if low < x then
+        U512 { low: low, high: 1 }
+    else
+        U512 { low: low, high: 0 }
+
+def addq(x: Nat, y: Nat): Nat =
+    modq(add_nat_to_u512(x, y))
+
+# Uses 512 as intermediate repr and modq to produce a Nat
+def mulq(x: Nat, y: Nat): Nat = modq(mul_nat_to_u512(x, y))
+
+# Convenient multiply fn
+def mul_nat_to_u512(x: Nat, y: Nat): U512 =
+    let res = U512 { low: 0, high: 0 } in
+    loop 256 do
+        set! res = if y % 2 == 1 then add_u512(res, to_u512(x)) else res;
+        set! x = x << 1;
+        set! y = y >> 1;
+    done with res
+
+def expq(base: Nat, exp: Nat): Nat =
+    let res = 1 :: Nat in
+    loop 256 do
+        set! res = if exp & 1 then
+                #mulq(res, mulq(base, base))
+                mulq(res, base)
+            else
+                res;
+                #mulq(res, base);
+        set! base = mulq(base, base);
+        set! exp = exp >> 1;
+    done with res
+
+def modq(x: U512): Nat =
+    let q = 2**255-19 in
+    let k = 2**256 % q in
+    (k * (x.high % q) % q) + (x.low % q)
+
+def inverse(x: Nat): Nat =
+    let c = x in
+    # Loop 253 - 5, since bits at index 4 and 2 are 0, manually compute the rest
+    let c1 = loop 248 do
+        set! c = mulq(mulq(c, c), x);
+    done with c in
+    let s5 = mulq(c, c) in
+    let s4 = mulq(mulq(c, c), x) in
+    let s3 = mulq(c, c) in
+    let s2 = mulq(mulq(c, c), x) in
+    let s1 = mulq(mulq(c, c), x) in
+    s1
+
+def scalar_mul(p: Nat, i: Nat): Nat =
+    # 0x7f00000000000000000000000000000000000000000000000000000000f8
+    let clamp_const1 = 876521786042401601004213994509182232461290839465639092505640576422510840 in
+    # 0x40111111111111111111111111111111111111111111111111111111111111
+    let clamp_const2 = 113196001950135156048636593214262979580680801659831321250324237296147173649 in
+    # i with constraints for security
+    let clamped = i & clamp_const1 | clamp_const2 in
+    # Shifts right each iteration to get the lsb
+    let moving_clamped = clamped in
+    let bit = 0 :: Nat in
+    let x = p in
+    let a = 1 :: Nat in
+    let b = x in
+    let c = 0 :: Nat in
+    let d = 1 :: Nat in
+    let e = 0 :: Nat in
+    let f = 0 :: Nat in
+
+    loop 255 do
+        # Get lsb
+        set! bit = moving_clamped & 1;
+        # Shift for new lsb
+        set! moving_clamped = moving_clamped >> 1;
+        # Swap a&b if bit
+        set! a = if bit then b else a;
+        set! b = if bit then a else b;
+        # Swap c&d if bit
+        set! c = if bit then d else c;
+        set! d = if bit then c else d;
+        # Maths
+        set! e = addq(a, c);
+        set! a = a - c;
+        set! c = addq(b, d);
+        set! b = b - d;
+        set! d = mulq(e, e);
+        set! f = mulq(a, a);
+        set! a = mulq(c, a);
+        set! c = mulq(b, e);
+        set! e = addq(a, c);
+        set! a = a - c;
+        set! b = mulq(a, a);
+        set! c = d - f;
+        set! a = mulq(c, 121665);
+        set! a = addq(a, d);
+        set! c = mulq(c, a);
+        set! a = mulq(d, f);
+        set! d = mulq(b, x);
+        set! b = mulq(e, e);
+        # Swap a&b if bit
+        set! a = if bit then b else a;
+        set! b = if bit then a else b;
+        # Swap c&d if bit
+        set! c = if bit then d else c;
+        set! d = if bit then c else d;
+    #done with mulq(a, inverse(c))
+    done with a
+
+def generate<$x>(n: {$x}) =
+    #let g = Point { x: 9, y: 2687234 } in
+    let g = Point { x: 14847277145635483483963372537557091634710985132825781088887140890597596352251, y: 48981431527428949880507557032295310859754924433568441600873610210018059225738 } in
+    #let g = Point { x: 9, y: 14781619447589544791020593568409986887264606134616475288964881837755586237401 } in
+    let res = g in
+    loop $x do
+        set! res = add_point(res, g);
+    done with res
+
+
+def add_point(a: Point, b: Point) =
+    let const_a = 486662 in
+    let k_a = const_a * 2 in
+    # TODO handle if b = -a
+    if a.x == b.x then
+        Point {
+            #x: ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**2 - const_a - 2*a.x,
+            x: expq(addq(mulq(3,mulq(a.x, a.x)), addq(mulq(k_a, a.x), 1)) / mulq(2, a.y), 2) - const_a - mulq(2, a.x),
+            #y: (((2*a.x + b.x + const_a) * (3*a.x*a.x + 2*const_a*a.x+1)) / (2*a.y)) - ((3*a.x*a.x + 2*const_a*a.x + 1) / (2*a.y))**3 - a.y
+            y: mulq(addq(addq(mulq(2,a.x), b.x), const_a), addq(mulq(3,mulq(a.x,a.x)), addq(mulq(k_a,a.x), 1))) / mulq(2,a.y)
+                - expq(addq(mulq(3,mulq(a.x,a.x)), addq(mulq(k_a,a.x), 1)) / mulq(2,a.y), 3) - a.y,
+        }
+    else
+        Point {
+            #x: ((b.y - a.y) / (b.x - a.x))**2 - const_a - a.x - b.x,
+            x: expq((b.y - a.y) / (b.x - a.x), 2) - const_a - a.x - b.x,
+            #y: (((2*a.x + b.x + const_a) * (b.y - a.y)) / (b.x - a.x)) - ((b.y - a.y) / (b.x - a.x))**3 - a.y
+            y: mulq(addq(mulq(2, a.x), addq(b.x, const_a)), b.y - a.y) / (b.x - a.x) - expq((b.y - a.y) / (b.x - a.x), 3) - a.y
+        }
+
+# 2G
+#( 14847277145635483483963372537557091634710985132825781088887140890597596352251 , 48981431527428949880507557032295310859754924433568441600873610210018059225738 )
+
+
+---
+let a = Point { x: 1, y: 1 } in
+let b = Point { x: 2, y: 1 } in
+#generate(2)
+#let g1 = Point { x: 14847277145635483483963372537557091634710985132825781088887140890597596352251, y: 48981431527428949880507557032295310859754924433568441600873610210018059225738 } in
+#let ng1 = Point { x: 14847277145635483483963372537557091634710985132825781088887140890597596352251, y: negate(48981431527428949880507557032295310859754924433568441600873610210018059225738) } in
+#add_point(g1,ng1)
+#expq(2, 4)
+scalar_mul(9, 2)
