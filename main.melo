@@ -87,17 +87,19 @@ def inverse(x: Nat): Nat =
     #s1
     c1
 
-def scalar_mul(p: Nat, i: Nat): Nat =
-    # 0x7f11111111111111111111111111111111111111111111111111111111f8
-    #let clamp_const1 = 876521786042401601004213994509182232461290839465639092505640576422510840 in
-    let clamp_const1 = 876981902465520971923376311566667367491454246730450451609318078037430776 in
-    # 0x40000000000000000000000000000000000000000000000000000000000000
-    #let clamp_const2 = 114845059210594981422914337548289703528786453296915232277904403084020285439 in
-    let clamp_const2 = 113078212145816597093331040047546785012958969400039613319782796882727665664 in
+def subq(x: Nat, y: Nat): Nat =
+    let q = 2**255-19 in
+    let z = x - y in
+    if z > x then z % q else z
+
+def scalar_mul(p: Nat, s: Nat): Nat =
+    # 0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8
+    let clamp_const1 = 57896044618658097711785492504343953926634992332820282019728792003956564819960 in
+    # 0x4000000000000000000000000000000000000000000000000000000000000000
+    let clamp_const2 = 28948022309329048855892746252171976963317496166410141009864396001978282409984 in
     # i with constraints for security
-    let clamped = i & clamp_const1 | clamp_const2 in
+    let clamped = (s & clamp_const1) | clamp_const2 in
     # Shifts right each iteration to get the lsb
-    let moving_clamped = clamped in
     let bit = 0 :: Nat in
     let x = p in
     let a = 1 :: Nat in
@@ -106,12 +108,14 @@ def scalar_mul(p: Nat, i: Nat): Nat =
     let d = 1 :: Nat in
     let e = 0 :: Nat in
     let f = 0 :: Nat in
+    let i = 255 :: Nat in
+    #let tmp = "" :: %[] in
 
     loop 255 do
         # Get lsb
-        set! bit = moving_clamped & 1;
+        set! i = i-1;
+        set! bit = ((clamped >> ((i >> 3) << 3) & 255) >> (i&7)) & 1;
         # Shift for new lsb
-        set! moving_clamped = moving_clamped >> 1;
         # Swap a&b if bit
         set! a = if bit then b else a;
         set! b = if bit then a else b;
@@ -120,17 +124,17 @@ def scalar_mul(p: Nat, i: Nat): Nat =
         set! d = if bit then c else d;
         # Maths
         set! e = addq(a, c);
-        set! a = a - c;
+        set! a = subq(a, c);
         set! c = addq(b, d);
-        set! b = b - d;
+        set! b = subq(b, d);
         set! d = mulq(e, e);
         set! f = mulq(a, a);
         set! a = mulq(c, a);
         set! c = mulq(b, e);
         set! e = addq(a, c);
-        set! a = a - c;
+        set! a = subq(a, c);
         set! b = mulq(a, a);
-        set! c = d - f;
+        set! c = subq(d, f);
         set! a = mulq(c, 121665);
         set! a = addq(a, d);
         set! c = mulq(c, a);
@@ -143,7 +147,7 @@ def scalar_mul(p: Nat, i: Nat): Nat =
         # Swap c&d if bit
         set! c = if bit then d else c;
         set! d = if bit then c else d;
-    done with mulq(a, inverse(c))
+    done with mulq(a, print(inverse(c)))
     #done with a
 
 def generate<$x>(n: {$x}) =
@@ -190,6 +194,6 @@ let x22561 = 1157920892373161954235709850086879078532699846656405640394575840079
 #mulq(x2253,x2253)
 #addq(2**255+1, 2**255)
 #scalar_mul(3, inverse(2))
-#scalar_mul(9, 1)
+scalar_mul(9, 1)
 #inverse(inverse(2))
-inverse(2)
+#inverse(2)
