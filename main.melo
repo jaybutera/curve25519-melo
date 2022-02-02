@@ -89,8 +89,9 @@ def inverse(x: Nat): Nat =
 
 def subq(x: Nat, y: Nat): Nat =
     let q = 2**255-19 in
-    let z = x - y in
-    if z > x then z % q else z
+    x - y % q
+    #let z = x - y in
+    #if z > x then z % q else z
 
 def scalar_mul(p: Nat, s: Nat): Nat =
     # 0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8
@@ -109,6 +110,7 @@ def scalar_mul(p: Nat, s: Nat): Nat =
     let e = 0 :: Nat in
     let f = 0 :: Nat in
     let i = 255 :: Nat in
+    let tmp_swap = a in
     #let tmp = "" :: %[] in
 
     loop 255 do
@@ -117,15 +119,17 @@ def scalar_mul(p: Nat, s: Nat): Nat =
         set! bit = ((clamped >> ((i >> 3) << 3) & 255) >> (i&7)) & 1;
         # Shift for new lsb
         # Swap a&b if bit
+        set! tmp_swap = a;
         set! a = if bit then b else a;
-        set! b = if bit then a else b;
+        set! b = if bit then tmp_swap else b;
         # Swap c&d if bit
+        set! tmp_swap = c;
         set! c = if bit then d else c;
-        set! d = if bit then c else d;
+        set! d = if bit then tmp_swap else d;
         # Maths
         set! e = addq(a, c);
         set! a = subq(a, c);
-        set! c = addq(b, d);
+        set! c = print(addq(b, d));
         set! b = subq(b, d);
         set! d = mulq(e, e);
         set! f = mulq(a, a);
@@ -142,12 +146,14 @@ def scalar_mul(p: Nat, s: Nat): Nat =
         set! d = mulq(b, x);
         set! b = mulq(e, e);
         # Swap a&b if bit
+        set! tmp_swap = a;
         set! a = if bit then b else a;
-        set! b = if bit then a else b;
+        set! b = if bit then tmp_swap else b;
         # Swap c&d if bit
+        set! tmp_swap = c;
         set! c = if bit then d else c;
-        set! d = if bit then c else d;
-    done with mulq(a, print(inverse(c)))
+        set! d = if bit then tmp_swap else d;
+    done with print(mulq(a, inverse(print(c))))
     #done with a
 
 def generate<$x>(n: {$x}) =
@@ -185,15 +191,9 @@ def add_point(a: Point, b: Point) =
 
 
 ---
-let a = Point { x: 1, y: 1 } in
-let b = Point { x: 2, y: 1 } in
-#generate(2)
-let x2253  = 14474011154664524427946373126085988481658748083205070504932198000989141204992 in
-let x22561 = 115792089237316195423570985008687907853269984665640564039457584007913129639935 in
-#inverse(inverse(9))
+#let x2253  = 14474011154664524427946373126085988481658748083205070504932198000989141204992 in
+#let x22561 = 115792089237316195423570985008687907853269984665640564039457584007913129639935 in
 #mulq(x2253,x2253)
 #addq(2**255+1, 2**255)
-#scalar_mul(3, inverse(2))
 scalar_mul(9, 1)
-#inverse(inverse(2))
-#inverse(2)
+#inverse(inverse(9))
