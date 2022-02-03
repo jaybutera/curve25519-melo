@@ -89,7 +89,11 @@ def inverse(x: Nat): Nat =
 
 def subq(x: Nat, y: Nat): Nat =
     let q = 2**255-19 in
-    x - y % q
+    if x < y then
+        #(y - x) % q
+        q - (y - x)
+    else
+        x - y
     #let z = x - y in
     #if z > x then z % q else z
 
@@ -129,7 +133,7 @@ def scalar_mul(p: Nat, s: Nat): Nat =
         # Maths
         set! e = addq(a, c);
         set! a = subq(a, c);
-        set! c = print(addq(b, d));
+        set! c = addq(b, d);
         set! b = subq(b, d);
         set! d = mulq(e, e);
         set! f = mulq(a, a);
@@ -153,8 +157,7 @@ def scalar_mul(p: Nat, s: Nat): Nat =
         set! tmp_swap = c;
         set! c = if bit then d else c;
         set! d = if bit then tmp_swap else d;
-    done with print(mulq(a, inverse(print(c))))
-    #done with a
+    done with mulq(a, inverse(c))
 
 def generate<$x>(n: {$x}) =
     #let g = Point { x: 9, y: 2687234 } in
